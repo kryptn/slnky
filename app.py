@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, url_for
 from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
 
@@ -14,6 +14,17 @@ class Links(db.Model):
 
     def __init__(self, url):
         self.url = url
+
+    @property
+    def redirect_url(self):
+        return api.url_for(Redirector,
+                           redirect_id=self.id,
+                           _external=True)
+    
+    def serialize(self):
+        return {'id': self.id,
+                'url': self.url,
+                'redirect_url': self.redirect_url}
             
     @staticmethod
     def get_or_create(url):
@@ -27,35 +38,51 @@ class Links(db.Model):
 
         return result, created
 
-class Slnky(Resource):
+class Redirector(Resource):
+
     def get(self, redirect_id):
-        rurl = None
+        redirect_url = None
         try:
             result = Links.query.get_or_404(redirect_id)
-            rurl = result.url
+            redirect_url = result.url
         except NotFound:
-            pass
+            redirect_url = api.url_for(Viewer, redirect_id=redirect_id)
 
-        return {'redirect_id':rurl, 'redirect': True}
+        return {}, 301, {'Location': redirect_url}
 
+class Viewer(Resource):
+
+    def get(self, redirect_id=None):
+        if redirect_id:
+            redirect_url = None
+            try:
+                result = Links.query.get_or_404(redirect_id)
+                redirect_url = result.url
+            except NotFound:
+                pass
+
+            return {'redirect_id':redirect_id,
+                    'redirect_url': redirect_url,
+                    'slnky_url': result.redirect_url if redirect_url else None,}
+        else:
+            return [link.serialize() for link in Links.query.all()]
+
+
+class Slnky(Resource):
+
+    def get(self, url):
+        result, created = Links.get_or_create(url)
+        return {}, 301, {'Location': api.url_for(Viewer, redirect_id=result.id)}
+    
     def put(self, url):
         result, created = Links.get_or_create(url)
-        return {'redirect_id': result.id,
-                'redirect_url': result.url,
-                'redirect': False}
+        return {'slnky_url': api.url_for(Redirector, redirect_id=result.id, _external=True)}
 
-api.add_resource(Slnky, '/<int:redirect_id>', '/c/<string:url>')
-
+api.add_resource(Redirector, '/<int:redirect_id>')
+api.add_resource(Viewer, '/v', '/v/<int:redirect_id>')
+api.add_resource(Slnky, '/c/<path:url>')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
-
-
-
-
-
-
-
-
 
 
