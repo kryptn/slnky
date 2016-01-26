@@ -53,7 +53,7 @@ class Redirector(Resource):
         # Redirect user to url if available
         result = Links.query.filter_by(slug=slug).first()
         if result:
-            return {}, 301, {'Location': result.slug_url}
+            return {}, 301, {'Location': result.url}
 
         # Otherwise redirect to main viewer
         return {}, 302, {'Location': api.url_for(Viewer, slug=None)}
